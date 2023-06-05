@@ -387,7 +387,7 @@ struct dns_qtype_soa_list {
 };
 
 struct dns_qtype_soa_table {
-	DECLARE_HASHTABLE(qtype, 8);
+	DECLARE_HASHTABLE(qtype, 16);
 };
 extern struct dns_qtype_soa_table dns_qtype_soa_table;
 

@@ -2384,6 +2384,7 @@ static int _config_qtype_soa(void *data, int argc, char *argv[])
 {
 	struct dns_qtype_soa_list *soa_list = NULL;
 	int i = 0;
+	int j = 0;
 
 	if (argc <= 1) {
 		return -1;
@@ -2393,19 +2394,52 @@ static int _config_qtype_soa(void *data, int argc, char *argv[])
 		char sub_arg[1024];
 		safe_strncpy(sub_arg, argv[i], sizeof(sub_arg));
 		for (char *tok = strtok(sub_arg, ","); tok; tok = strtok(NULL, ",")) {
-			soa_list = malloc(sizeof(*soa_list));
-			if (soa_list == NULL) {
-				tlog(TLOG_ERROR, "cannot malloc memory");
-				return -1;
+			char *dash = strstr(tok, "-");
+			if (dash != NULL) {
+				*dash = '\0';
 			}
 
-			memset(soa_list, 0, sizeof(*soa_list));
-			soa_list->qtypeid = atol(tok);
-			if (soa_list->qtypeid == DNS_T_AAAA) {
-				dns_conf_force_AAAA_SOA = 1;
+			long start = atol(tok);
+			long end = start;
+
+			if (start > 65535 || end > 65535) {
+				tlog(TLOG_ERROR, "invalid qtype %ld", start);
+				continue;
 			}
-			uint32_t key = hash_32_generic(soa_list->qtypeid, 32);
-			hash_add(dns_qtype_soa_table.qtype, &soa_list->node, key);
+
+			if (dash != NULL && *(dash + 1) != '\0') {
+				end = atol(dash + 1);
+			}
+
+			for (j = start; j <= end; j++) {
+				uint32_t key = hash_32_generic(j, 32);
+				hash_for_each_possible(dns_qtype_soa_table.qtype, soa_list, node, key)
+				{
+					if ((uint32_t)j != soa_list->qtypeid) {
+						continue;
+					}
+
+					j = end + 1;
+					break;
+				}
+
+				if (j > end) {
+					continue;
+				}
+
+				soa_list = malloc(sizeof(*soa_list));
+				if (soa_list == NULL) {
+					tlog(TLOG_ERROR, "cannot malloc memory");
+					return -1;
+				}
+
+				memset(soa_list, 0, sizeof(*soa_list));
+				soa_list->qtypeid = j;
+				if (soa_list->qtypeid == DNS_T_AAAA) {
+					dns_conf_force_AAAA_SOA = 1;
+				}
+				hash_add(dns_qtype_soa_table.qtype, &soa_list->node, key);
+			}
 		}
 	}
 
